@@ -6,7 +6,7 @@ services:
     plan: free
     branch: main
     buildCommand: ./build.sh
-    startCommand: .venv/bin/gunicorn backend.inventory_system.wsgi:application --bind 0.0.0.0:$PORT
+    startCommand: cd backend && ../.venv/bin/gunicorn inventory_system.wsgi:application --bind 0.0.0.0:$PORT
     envVars:
       - key: DJANGO_SETTINGS_MODULE
         value: inventory_system.settings_production
