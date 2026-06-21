@@ -5,7 +5,7 @@ services:
     pythonVersion: 3.12
     plan: free
     branch: main
-    buildCommand: pip install -r backend/requirements.txt && python backend/manage.py collectstatic --noinput
+    buildCommand: pip install -r backend/requirements.txt && python3 backend/manage.py collectstatic --noinput
     startCommand: python3 backend/manage.py migrate --noinput && gunicorn backend.inventory_system.wsgi:application --bind 0.0.0.0:$PORT
     envVars:
       - key: DJANGO_SETTINGS_MODULE
@@ -28,4 +28,5 @@ services:
         value: "5432"
 
 # For a managed Render PostgreSQL database, set these values in the service environment or use the Render dashboard secrets.
+
 
