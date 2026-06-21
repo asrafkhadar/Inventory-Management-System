@@ -537,6 +537,14 @@ class SalesAnalyticsViewSet(viewsets.ReadOnlyModelViewSet):
         """Get sales trends for last 30 days"""
         thirty_days_ago = timezone.now().date() - timedelta(days=30)
         analytics = self.get_queryset().filter(date__gte=thirty_days_ago)
+
+        # If there is no recent data for the last 30 calendar days,
+        # fall back to the latest available 30-day range in the dataset.
+        if not analytics.exists():
+            latest_date = self.get_queryset().order_by('-date').values_list('date', flat=True).first()
+            if latest_date:
+                thirty_days_ago = latest_date - timedelta(days=29)
+                analytics = self.get_queryset().filter(date__gte=thirty_days_ago)
         
         data = analytics.values('date').annotate(
             total_units=Sum('units_sold'),
@@ -589,28 +597,26 @@ class ForecastViewSet(viewsets.ModelViewSet):
             # Get historical data
             analytics = SalesAnalytics.objects.filter(product=product).order_by('date')
             
-            if analytics.count() < 3:
+            if analytics.count() < 1:
                 return Response(
                     {'error': 'Insufficient historical data for forecasting'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
-            # Prepare data for ML model
-            dates = np.array([a.date.toordinal() for a in analytics]).reshape(-1, 1)
-            units = np.array([a.units_sold for a in analytics])
-            
-            # Train model
-            model = LinearRegression()
-            model.fit(dates, units)
-            
-            # Generate forecasts
+
+            dates = [entry.date.toordinal() for entry in analytics]
+            units = [entry.units_sold for entry in analytics]
+            average_units = sum(units) / len(units)
+            trend = 0
+            if len(units) > 1:
+                trend = (units[-1] - units[0]) / max(1, len(units) - 1)
+
             forecasts = []
             today = timezone.now().date()
             for i in range(1, days_ahead + 1):
                 forecast_date = today + timedelta(days=i)
-                predicted_units = max(0, int(model.predict([[forecast_date.toordinal()]])[0]))
-                confidence = min(0.95, 0.5 + analytics.count() * 0.05)
-                
+                predicted_units = max(0, int(round(average_units + trend * i)))
+                confidence = min(0.95, 0.5 + len(analytics) * 0.05)
+
                 forecast, created = Forecast.objects.update_or_create(
                     product=product,
                     forecast_date=forecast_date,
