@@ -74,11 +74,12 @@ const App = {
         document.getElementById('refreshDashboard')?.addEventListener('click', () => this.loadDashboard());
 
         // Inventory
-        document.getElementById('addInventoryBtn')?.addEventListener('click', () => UI.openModal('inventoryModal'));
+        document.getElementById('addInventoryBtn')?.addEventListener('click', () => this.openInventoryModal());
         document.getElementById('exportInventoryBtn')?.addEventListener('click', () => this.exportInventoryData());
         document.getElementById('inventorySearch')?.addEventListener('input', debounce(() => this.searchInventory(), 300));
         document.getElementById('warehouseFilter')?.addEventListener('change', () => this.filterInventory());
         document.getElementById('statusFilter')?.addEventListener('change', () => this.filterInventory());
+        document.getElementById('inventoryForm')?.addEventListener('submit', (e) => this.handleInventoryFormSubmit(e));
 
         // Products
         document.getElementById('addProductBtn')?.addEventListener('click', () => this.openProductModal());
@@ -184,13 +185,25 @@ const App = {
             const topProducts = await apiGet(`${API_ENDPOINTS.analytics}top_products/`);
 
             // Sales trends chart
+            const salesTrendCard = document.getElementById('salesTrendChart')?.closest('.card');
             if (trends && trends.length > 0) {
                 const labels = trends.map(t => formatDate(t.date));
                 const data = trends.map(t => t.total_units);
+                salesTrendCard?.querySelector('.no-data')?.remove();
                 UI.renderLineChart('salesTrendChart', labels, [{
                     label: 'Units Sold',
                     data
                 }], 'Sales Trends (30 Days)');
+            } else {
+                if (salesTrendCard) {
+                    let noDataMessage = salesTrendCard.querySelector('.no-data');
+                    if (!noDataMessage) {
+                        noDataMessage = document.createElement('p');
+                        noDataMessage.className = 'no-data';
+                        salesTrendCard.appendChild(noDataMessage);
+                    }
+                    noDataMessage.textContent = 'No sales trend data is available for the last 30 days.';
+                }
             }
 
             // Top products chart
@@ -321,15 +334,13 @@ const App = {
 
     async exportProductData() {
         try {
-            const format = prompt('Export as: csv or xlsx?');
+            const format = prompt('Export as: csv (type csv)');
             if (format === 'csv') {
                 const response = await apiCall(`${API_ENDPOINTS.products}export_csv/`, 'GET');
                 downloadFile(response, 'products.csv', 'text/csv');
                 showSuccess('Products exported as CSV');
-            } else if (format === 'xlsx') {
-                const response = await apiCall(`${API_ENDPOINTS.products}export_xlsx/`, 'GET');
-                downloadFile(response, 'products.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-                showSuccess('Products exported as XLSX');
+            } else {
+                showError('Only CSV export is supported at this time.');
             }
         } catch (error) {
             showError('Export failed: ' + error.message);
@@ -605,8 +616,26 @@ const App = {
     },
 
     filterInventory() {
-        // Implement filter logic
-        this.loadInventory();
+        const warehouseId = document.getElementById('warehouseFilter')?.value;
+        const status = document.getElementById('statusFilter')?.value;
+        let inventory = this.data.inventory?.results || this.data.inventory || [];
+
+        if (warehouseId) {
+            inventory = inventory.filter(item => {
+                return String(item.warehouse || item.warehouse_id || item.warehouse_name) === String(warehouseId) ||
+                       String(item.warehouse_name) === String(warehouseId);
+            });
+        }
+
+        if (status) {
+            inventory = inventory.filter(item => {
+                if (status === 'low-stock') return item.quantity <= 10;
+                if (status === 'out-of-stock') return item.quantity === 0;
+                return item.quantity > 10;
+            });
+        }
+
+        this.renderInventoryTable(inventory);
     },
 
     async exportInventoryData() {
@@ -620,6 +649,30 @@ const App = {
     },
 
     // Purchase Orders
+    async openInventoryModal() {
+        UI.openModal('inventoryModal');
+        UI.clearForm('inventoryForm');
+
+        const products = await apiGet(API_ENDPOINTS.products);
+        const warehouses = await apiGet(API_ENDPOINTS.warehouses);
+
+        UI.populateSelect('inventoryProduct', products.results || products, 'id', 'name');
+        UI.populateSelect('inventoryWarehouse', warehouses.results || warehouses, 'id', 'name');
+    },
+
+    async handleInventoryFormSubmit(e) {
+        e.preventDefault();
+        try {
+            const data = parseFormData(document.getElementById('inventoryForm'));
+            await apiPost(API_ENDPOINTS.inventory, data);
+            showSuccess('Inventory item added successfully');
+            UI.closeModal('inventoryModal');
+            this.loadInventory();
+        } catch (error) {
+            showError('Failed to save inventory item: ' + error.message);
+        }
+    },
+
     async openPOModal() {
         UI.openModal('poModal');
         UI.clearForm('poForm');
@@ -921,13 +974,16 @@ const App = {
     async openForecastModal() {
         const products = await apiGet(API_ENDPOINTS.products);
         UI.populateSelect('forecastProductFilter', products.results || products, 'id', 'name');
-        
+
+        const productId = document.getElementById('forecastProductFilter').value;
+        if (!productId) {
+            showError('Please select a product before generating a forecast.');
+            return;
+        }
+
         if (confirm('Generate forecast for selected product?')) {
-            const productId = document.getElementById('forecastProductFilter').value;
             const daysAhead = parseInt(document.getElementById('forecastDays').value) || 30;
-            if (productId) {
-                await this.generateForecast(productId, daysAhead);
-            }
+            await this.generateForecast(productId, daysAhead);
         }
     },
 

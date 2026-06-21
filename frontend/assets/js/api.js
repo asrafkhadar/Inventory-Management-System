@@ -61,13 +61,17 @@ async function apiCall(url, method = 'GET', data = null, isFormData = false) {
         }
 
         if (response.ok) {
-            const contentType = response.headers.get('content-type');
-            if (contentType && contentType.includes('application/json')) {
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
                 return await response.json();
+            } else if (contentType.includes('text/csv') ||
+                       contentType.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') ||
+                       contentType.includes('application/pdf')) {
+                return await response.blob();
             } else if (response.status === 204) {
                 return { success: true };
             } else {
-                return response;
+                return await response.text();
             }
         } else {
             // Attempt to parse error response as JSON
@@ -374,7 +378,15 @@ async function exportForecastCSV() {
 
 // Helper function to download files
 function downloadFile(response, filename, mimeType) {
-    const blob = new Blob([response], { type: mimeType });
+    let blob;
+    if (response instanceof Blob) {
+        blob = response;
+    } else if (response instanceof ArrayBuffer) {
+        blob = new Blob([response], { type: mimeType });
+    } else {
+        blob = new Blob([response], { type: mimeType });
+    }
+
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

@@ -435,6 +435,64 @@
     </div>
 
     <!-- Modals -->
+    <!-- Add Inventory Modal -->
+    <div id="inventoryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="inventoryModalTitle">Add Inventory Item</h2>
+                <button class="close-btn">&times;</button>
+            </div>
+            <form id="inventoryForm" class="modal-form">
+                <div class="form-group">
+                    <label>Product *</label>
+                    <select name="product_id" id="inventoryProduct" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Warehouse *</label>
+                    <select name="warehouse_id" id="inventoryWarehouse" required></select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Quantity *</label>
+                        <input type="number" name="quantity" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Batch Number</label>
+                        <input type="text" name="batch_number">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Aisle</label>
+                        <input type="text" name="aisle">
+                    </div>
+                    <div class="form-group">
+                        <label>Rack</label>
+                        <input type="text" name="rack">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Shelf</label>
+                        <input type="text" name="shelf">
+                    </div>
+                    <div class="form-group">
+                        <label>Bin</label>
+                        <input type="text" name="bin">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Expiry Date</label>
+                    <input type="date" name="expiry_date">
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn-primary">Save</button>
+                    <button type="button" class="btn-secondary" id="inventoryCancelBtn">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Add/Edit Product Modal -->
     <div id="productModal" class="modal">
         <div class="modal-content">
