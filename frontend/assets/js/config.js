@@ -1,7 +1,7 @@
 // Global Configuration
 const CONFIG = {
     APP_NAME: 'Inventory Management System',
-    API_BASE_URL: 'http://localhost:8000/api',
+    API_BASE_URL: window.location.origin + '/api',
     TIMEOUT: 30000,
     NOTIFICATION_DURATION: 5000,
     ITEMS_PER_PAGE: 20,
