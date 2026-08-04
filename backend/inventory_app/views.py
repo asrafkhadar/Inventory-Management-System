@@ -10,13 +10,25 @@ import csv
 import json
 import logging
 from io import BytesIO
-# from reportlab.lib.pagesizes import letter, A4
-# from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
-# from reportlab.lib.styles import getSampleStyleSheet
-# from reportlab.lib import colors
-# import pandas as pd
-# from sklearn.linear_model import LinearRegression
-# import numpy as np
+
+try:
+    from reportlab.lib.pagesizes import letter, A4
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib import colors
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    letter = A4 = None
+    SimpleDocTemplate = Table = TableStyle = Paragraph = Spacer = PageBreak = None
+    getSampleStyleSheet = colors = None
+    REPORTLAB_AVAILABLE = False
+
+try:
+    import pandas as pd
+    PANDAS_AVAILABLE = True
+except ImportError:
+    pd = None
+    PANDAS_AVAILABLE = False
 
 from .models import (
     Supplier, Product, Warehouse, InventoryLocation, Movement,
@@ -60,6 +72,14 @@ class SupplierViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def export_pdf(self, request):
         """Export suppliers as PDF"""
+        if not REPORTLAB_AVAILABLE:
+            response = HttpResponse(content_type='text/plain')
+            response['Content-Disposition'] = 'attachment; filename="suppliers.txt"'
+            response.write('Supplier Report\n\n')
+            for supplier in self.get_queryset():
+                response.write(f"{supplier.name}, {supplier.email}, {supplier.phone}, {supplier.city}, {supplier.country}\n")
+            return response
+
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = 'attachment; filename="suppliers.pdf"'
         
@@ -143,6 +163,18 @@ class ProductViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def export_xlsx(self, request):
         """Export products as Excel"""
+        if not PANDAS_AVAILABLE:
+            response = HttpResponse(content_type='text/csv')
+            response['Content-Disposition'] = 'attachment; filename="products.csv"'
+            writer = csv.writer(response)
+            writer.writerow(['Barcode', 'Name', 'Category', 'Unit Cost', 'Unit Price', 'Status'])
+            for product in self.get_queryset():
+                writer.writerow([
+                    product.barcode, product.name, product.category,
+                    product.unit_cost, product.unit_price, product.status
+                ])
+            return response
+
         products = self.get_queryset().values(
             'barcode', 'name', 'category', 'unit_cost', 'unit_price', 'status'
         )
@@ -524,66 +556,13 @@ class SalesOrderViewSet(viewsets.ModelViewSet):
         return response
 
 
-class SalesAnalyticsViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = SalesAnalytics.objects.select_related('product')
-    serializer_class = SalesAnalyticsSerializer
-    permission_classes = [AllowAny]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['product__name']
-    ordering_fields = ['date', 'units_sold', 'revenue']
-
-    @action(detail=False, methods=['get'])
-    def sales_trends(self, request):
-        """Get sales trends for last 30 days"""
-        thirty_days_ago = timezone.now().date() - timedelta(days=30)
-        analytics = self.get_queryset().filter(date__gte=thirty_days_ago)
-
-        # If there is no recent data for the last 30 calendar days,
-        # fall back to the latest available 30-day range in the dataset.
-        if not analytics.exists():
-            latest_date = self.get_queryset().order_by('-date').values_list('date', flat=True).first()
-            if latest_date:
-                thirty_days_ago = latest_date - timedelta(days=29)
-                analytics = self.get_queryset().filter(date__gte=thirty_days_ago)
-        
-        data = analytics.values('date').annotate(
-            total_units=Sum('units_sold'),
-            total_revenue=Sum('revenue')
-        ).order_by('date')
-        return Response(data)
-
-    @action(detail=False, methods=['get'])
-    def top_products(self, request):
-        """Get top selling products"""
-        top_products = self.get_queryset().values('product__name').annotate(
-            total_units=Sum('units_sold'),
-            total_revenue=Sum('revenue')
-        ).order_by('-total_units')[:10]
-        return Response(top_products)
-
-    @action(detail=False, methods=['get'])
-    def export_csv(self, request):
-        """Export sales analytics as CSV"""
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="sales_analytics.csv"'
-        writer = csv.writer(response)
-        writer.writerow(['Product', 'Date', 'Units Sold', 'Revenue'])
-        
-        analytics = self.get_queryset()
-        for entry in analytics:
-            writer.writerow([
-                entry.product.name, entry.date, entry.units_sold, entry.revenue
-            ])
-        return response
-
-
-class ForecastViewSet(viewsets.ModelViewSet):
+class ForecastViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Forecast.objects.select_related('product')
     serializer_class = ForecastSerializer
     permission_classes = [AllowAny]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['product__name']
-    ordering_fields = ['forecast_date', 'predicted_demand']
+    ordering_fields = ['forecast_date', 'predicted_demand', 'confidence_score']
 
     @action(detail=False, methods=['post'])
     def generate_forecast(self, request):
@@ -591,19 +570,17 @@ class ForecastViewSet(viewsets.ModelViewSet):
         try:
             product_id = request.data.get('product_id')
             days_ahead = int(request.data.get('days_ahead', 30))
-            
+
             product = Product.objects.get(id=product_id)
-            
-            # Get historical data
+
             analytics = SalesAnalytics.objects.filter(product=product).order_by('date')
-            
+
             if analytics.count() < 1:
                 return Response(
                     {'error': 'Insufficient historical data for forecasting'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            dates = [entry.date.toordinal() for entry in analytics]
             units = [entry.units_sold for entry in analytics]
             average_units = sum(units) / len(units)
             trend = 0
@@ -626,7 +603,7 @@ class ForecastViewSet(viewsets.ModelViewSet):
                     }
                 )
                 forecasts.append(forecast)
-            
+
             serializer = self.get_serializer(forecasts, many=True)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
@@ -639,7 +616,7 @@ class ForecastViewSet(viewsets.ModelViewSet):
         response['Content-Disposition'] = 'attachment; filename="forecasts.csv"'
         writer = csv.writer(response)
         writer.writerow(['Product', 'Forecast Date', 'Predicted Demand', 'Confidence'])
-        
+
         forecasts = self.get_queryset()
         for forecast in forecasts:
             writer.writerow([
@@ -647,5 +624,58 @@ class ForecastViewSet(viewsets.ModelViewSet):
                 forecast.forecast_date,
                 forecast.predicted_demand,
                 forecast.confidence_score
+            ])
+        return response
+
+
+class SalesAnalyticsViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = SalesAnalytics.objects.select_related('product')
+    serializer_class = SalesAnalyticsSerializer
+    permission_classes = [AllowAny]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['product__name']
+    ordering_fields = ['date', 'units_sold', 'revenue']
+
+    @action(detail=False, methods=['get'])
+    def sales_trends(self, request):
+        """Get sales trends for last 30 days"""
+        thirty_days_ago = timezone.now().date() - timedelta(days=30)
+        analytics = self.get_queryset().filter(date__gte=thirty_days_ago)
+
+        # If there is no recent data for the last 30 calendar days,
+        # fall back to the latest available 30-day range in the dataset.
+        if not analytics.exists():
+            latest_date = self.get_queryset().order_by('-date').values_list('date', flat=True).first()
+            if latest_date:
+                thirty_days_ago = latest_date - timedelta(days=29)
+                analytics = self.get_queryset().filter(date__gte=thirty_days_ago)
+
+        data = analytics.values('date').annotate(
+            total_units=Sum('units_sold'),
+            total_revenue=Sum('revenue')
+        ).order_by('date')
+        return Response(data)
+
+    @action(detail=False, methods=['get'])
+    def top_products(self, request):
+        """Get top selling products"""
+        top_products = self.get_queryset().values('product__name').annotate(
+            total_units=Sum('units_sold'),
+            total_revenue=Sum('revenue')
+        ).order_by('-total_units')[:10]
+        return Response(top_products)
+
+    @action(detail=False, methods=['get'])
+    def export_csv(self, request):
+        """Export sales analytics as CSV"""
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="sales_analytics.csv"'
+        writer = csv.writer(response)
+        writer.writerow(['Product', 'Date', 'Units Sold', 'Revenue'])
+
+        analytics = self.get_queryset()
+        for entry in analytics:
+            writer.writerow([
+                entry.product.name, entry.date, entry.units_sold, entry.revenue
             ])
         return response

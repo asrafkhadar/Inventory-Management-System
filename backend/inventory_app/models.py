@@ -37,7 +37,7 @@ class Product(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     barcode = models.CharField(max_length=100, unique=True)
     name = models.CharField(max_length=255)
-    description = models.TextField()
+    description = models.TextField(blank=True)
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
     supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True)
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2)
