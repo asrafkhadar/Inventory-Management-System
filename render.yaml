@@ -20,26 +20,6 @@ services:
         value: "*.render.com,127.0.0.1,localhost"
       - key: CORS_ALLOWED_ORIGINS
         value: "https://*.render.com,http://localhost:8000"
-      - key: DB_NAME
-        fromDatabase:
-          name: inventory-db
-          property: database
-      - key: DB_USER
-        fromDatabase:
-          name: inventory-db
-          property: user
-      - key: DB_PASSWORD
-        fromDatabase:
-          name: inventory-db
-          property: password
-      - key: DB_HOST
-        fromDatabase:
-          name: inventory-db
-          property: host
-      - key: DB_PORT
-        fromDatabase:
-          name: inventory-db
-          property: port
 
 databases:
   - name: inventory-db
