@@ -13,13 +13,13 @@ services:
       - key: DEBUG
         value: "False"
       - key: SECRET_KEY
-        value: "django-insecure-render-deployment-key-12345"
+        value: "django-insecure-render-sqlite-key-12345"
       - key: ALLOWED_HOSTS
         value: "*.render.com,127.0.0.1,localhost"
       - key: CORS_ALLOWED_ORIGINS
         value: "https://*.render.com,http://localhost:8000"
-      - key: DB_HOST
-        value: "localhost"
+
+# Note: Using SQLite database for production (no PostgreSQL setup needed)
 
 # For a managed Render PostgreSQL database, set these values in the service environment or use the Render dashboard secrets.
 
