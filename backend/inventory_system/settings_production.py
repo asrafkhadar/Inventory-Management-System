@@ -74,29 +74,29 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'inventory_system.wsgi.application'
 
-# Database configuration with fallback
-db_host = config('DB_HOST', default='').strip()
-db_engine = config('DB_ENGINE', default='postgresql')
+# Database configuration - Check for Render PostgreSQL first, then manual config, then SQLite fallback
+# Render injects DB credentials as RENDER_DB_* or we use manually set DB_* variables
+db_host = config('DB_HOST', config('RENDER_DB_HOST', default=''))
 
-if db_host and 'render.com' in db_host:
-    # Use PostgreSQL on Render
+if db_host:
+    # Use PostgreSQL if host is configured
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': config('DB_NAME', default='inventory_db'),
-            'USER': config('DB_USER', default='inventory_user'),
-            'PASSWORD': config('DB_PASSWORD', default=''),
+            'NAME': config('DB_NAME', config('RENDER_DB_NAME', default='inventory_db')),
+            'USER': config('DB_USER', config('RENDER_DB_USER', default='inventory_user')),
+            'PASSWORD': config('DB_PASSWORD', config('RENDER_DB_PASSWORD', default='')),
             'HOST': db_host,
-            'PORT': config('DB_PORT', default='5432'),
+            'PORT': config('DB_PORT', config('RENDER_DB_PORT', default='5432')),
             'CONN_MAX_AGE': 600,
             'OPTIONS': {
                 'connect_timeout': 10,
-                'sslmode': 'require',
+                'sslmode': 'require' if 'render.com' in db_host else 'disable',
             }
         }
     }
 else:
-    # Fallback to SQLite if PostgreSQL credentials are not available
+    # Fallback to SQLite if no PostgreSQL host configured
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',

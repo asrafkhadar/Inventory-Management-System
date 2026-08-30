@@ -5,8 +5,8 @@ services:
     pythonVersion: 3.12
     plan: free
     branch: main
-    buildCommand: ./build.sh
-    startCommand: cd backend && ../.venv/bin/python manage.py migrate --noinput && ../.venv/bin/gunicorn -w 2 -b 0.0.0.0:$PORT inventory_system.wsgi:application
+    buildCommand: chmod +x ./build.sh && ./build.sh
+    startCommand: cd backend && python -c "import os; print(f'DB_HOST: {os.environ.get(\"DB_HOST\", \"NOT SET\")}'); print(f'RENDER_DB_HOST: {os.environ.get(\"RENDER_DB_HOST\", \"NOT SET\")}');" && python manage.py migrate --noinput --verbosity 2 && gunicorn -w 2 -b 0.0.0.0:$PORT inventory_system.wsgi:application
     envVars:
       - key: DJANGO_SETTINGS_MODULE
         value: inventory_system.settings_production
