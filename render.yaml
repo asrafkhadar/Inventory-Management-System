@@ -13,19 +13,13 @@ services:
       - key: DEBUG
         value: "False"
       - key: SECRET_KEY
-        value: "REPLACE_WITH_A_STRONG_SECRET"
+        value: "django-insecure-render-deployment-key-12345"
       - key: ALLOWED_HOSTS
-        value: "*"
-      - key: DB_NAME
-        value: "RENDER_DB_NAME"
-      - key: DB_USER
-        value: "RENDER_DB_USER"
-      - key: DB_PASSWORD
-        value: "RENDER_DB_PASSWORD"
+        value: "*.render.com,127.0.0.1,localhost"
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://*.render.com,http://localhost:8000"
       - key: DB_HOST
-        value: "RENDER_DB_HOST"
-      - key: DB_PORT
-        value: "5432"
+        value: "localhost"
 
 # For a managed Render PostgreSQL database, set these values in the service environment or use the Render dashboard secrets.
 
