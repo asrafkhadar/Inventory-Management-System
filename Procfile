@@ -1,1 +1,1 @@
-web: cd backend && ../.venv/bin/python manage.py migrate --noinput && ../.venv/bin/gunicorn inventory_system.wsgi:application --bind 0.0.0.0:$PORT
+web: cd backend && gunicorn inventory_system.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
